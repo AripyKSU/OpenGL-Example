@@ -13,6 +13,8 @@ ProgramUPtr Program::Create(
 bool Program::Link(  
     const std::vector<ShaderPtr>& shaders) {
     m_program = glCreateProgram();
+
+    //iterator for문
     for (auto& shader: shaders)
         glAttachShader(m_program, shader->Get());
     glLinkProgram(m_program);

@@ -61,8 +61,8 @@ int main(int argc, const char** argv) {
         glfwTerminate();
         return -1;
     }
-    auto glVersion = glGetString(GL_VERSION);
-    //SPDLOG_INFO("OpenGL context version: {}", glVersion);
+    const char* glVersion = (const char*)(glGetString(GL_VERSION));
+    SPDLOG_INFO("OpenGL context version: {}", glVersion);
 
     auto context = Context::Create();
     if (!context) {
