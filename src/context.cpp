@@ -60,10 +60,12 @@ bool Context::Init() {
         return false;
     SPDLOG_INFO("program id: {}", m_program->Get());
 
-    // //simple.fs의 uniform var이름을 통해 loc(위치)를 받아옴
-    // auto loc = glGetUniformLocation(m_program->Get(), "color");
-    // m_program->Use();
-    // glUniform4f(loc, 1.0f, 1.0f, 0.0f, 1.0f);  
+    /*  
+        //simple.fs의 uniform var이름을 통해 loc(위치)를 받아옴
+        auto loc = glGetUniformLocation(m_program->Get(), "color");
+        m_program->Use();
+        glUniform4f(loc, 1.0f, 1.0f, 0.0f, 1.0f); 
+    */ 
 
     glClearColor(0.1f, 0.2f, 0.3f, 0.0f);
 
@@ -74,21 +76,22 @@ bool Context::Init() {
     SPDLOG_INFO("image: {}x{}, {} channels",
         image->GetWidth(), image->GetHeight(), image->GetChannelCount());
 
-    //Texture Gen
-    glGenTextures(1, &m_texture);
-    glBindTexture(GL_TEXTURE_2D, m_texture);
-    //min: image 축소시 filter, mag: image 확대시 filter
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    //s: 가로 축 0~1밖의 값 wrapper, t: 세로 축 0~1밖의 값 wrapper 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    //ImageUPtr에서 Image*를 얻기 위해 get() 사용
+    m_texture = Texture::CreateFromImage(image.get());
 
-    //target, gpu 쪽 texture data:glGenTexture에 만들 것, cpu 쪽 data: image에 로딩했던 데이터 
-    //두 번째 0은 border 사이즈
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
-        image->GetWidth(), image->GetHeight(), 0,
-        GL_RGB, GL_UNSIGNED_BYTE, image->GetData());
+    auto image2 = Image::Load("./images/awesomeface.png");
+    if (!image2) 
+        return false;
+    m_texture2 = Texture::CreateFromImage(image2.get());
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, m_texture->Get());
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, m_texture2->Get());
+
+    m_program->Use();
+    glUniform1i(glGetUniformLocation(m_program->Get(), "tex"), 0);
+    glUniform1i(glGetUniformLocation(m_program->Get(), "tex2"), 1);
 
     return true;
 }
