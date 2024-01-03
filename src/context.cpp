@@ -1,5 +1,7 @@
 #include "context.h"
 #include "image.h"
+#include <imgui.h>
+
 
 ContextUPtr Context::Create() {
     auto context = ContextUPtr(new Context());
@@ -70,7 +72,6 @@ bool Context::Init() {
     //texture coordinate
     m_vertexLayout->SetAttrib(2, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 5, sizeof(float) * 3);
 
-
     //index buffer 생성 및 초기화
     m_indexBuffer = Buffer::CreateWithData(GL_ELEMENT_ARRAY_BUFFER, GL_STATIC_DRAW, 
         indices, sizeof(uint32_t)*36);
@@ -136,6 +137,34 @@ bool Context::Init() {
 }
 
 void Context::Render() {
+    if (ImGui::Begin("ui window")) {
+        //색상 변경
+        if (ImGui::ColorEdit4("clear color", glm::value_ptr(m_clearColor))) {
+            glClearColor(m_clearColor.r, m_clearColor.g, m_clearColor.b, m_clearColor.a);
+        }
+
+        ImGui::Separator();
+
+        //카메라 설정
+        ImGui::DragFloat3("camera pos", glm::value_ptr(m_cameraPos), 0.01f);
+        ImGui::DragFloat("camera yaw", &m_cameraYaw, 0.5f);
+        ImGui::DragFloat("camera pitch", &m_cameraPitch, 0.5f, -89.0f, 89.0f);
+
+        ImGui::Separator();
+
+        if (ImGui::Button("reset color")) {
+            m_clearColor = glm::vec4(0.1f, 0.2f, 0.3f, 0.0f);
+            glClearColor(m_clearColor.r, m_clearColor.g, m_clearColor.b, m_clearColor.a);
+        }
+
+        if (ImGui::Button("reset camera")) {
+            m_cameraYaw = 0.0f;
+            m_cameraPitch = 0.0f;
+            m_cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
+        }
+    }
+    ImGui::End();
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     //깊이 버퍼 활성화
     glEnable(GL_DEPTH_TEST);
@@ -217,7 +246,7 @@ void Context::MouseMove(double x, double y) {
     auto pos = glm::vec2((float)x, (float)y);
     auto deltaPos = pos - m_prevMousePos;
 
-    const float cameraRotSpeed = 0.8f;
+    const float cameraRotSpeed = 0.4f;
     m_cameraYaw -= deltaPos.x * cameraRotSpeed;
     m_cameraPitch -= deltaPos.y * cameraRotSpeed;
 
