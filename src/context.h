@@ -22,6 +22,7 @@ private:
     Context() {}
     bool Init();
     ProgramUPtr m_program;
+    ProgramUPtr m_simpleProgram;
 
     VertexLayoutUPtr m_vertexLayout;
     BufferUPtr m_vertexBuffer;
@@ -32,8 +33,28 @@ private:
     int m_width { WINDOW_WIDTH };
     int m_height { WINDOW_HEIGHT };
 
+    // animation
+    bool m_animation { true };
+
     // clear color
     glm::vec4 m_clearColor { glm::vec4(0.1f, 0.2f, 0.3f, 0.0f) };
+
+    // light parameter
+    struct Light {
+        glm::vec3 position { glm::vec3(3.0f, 3.0f, 3.0f) };
+        glm::vec3 ambient { glm::vec3(0.1f, 0.1f, 0.1f) };
+        glm::vec3 diffuse { glm::vec3(0.5f, 0.5f, 0.5f) };
+        glm::vec3 specular { glm::vec3(1.0f, 1.0f, 1.0f) };
+    };
+    Light m_light;
+
+    // material parameter
+    struct Material {
+        TextureUPtr diffuse;
+        TextureUPtr specular;
+        float shininess { 32.0f };
+    };
+    Material m_material;
 
     // camera parameter
     bool m_cameraControl { false };

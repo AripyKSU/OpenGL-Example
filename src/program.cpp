@@ -9,6 +9,18 @@ ProgramUPtr Program::Create(
     return std::move(program);
 }
 
+ProgramUPtr Program::Create(
+    const std::string& vertShaderFilename,
+    const std::string& fragShaderFilename) {
+    ShaderPtr vs = Shader::CreateFromFile(vertShaderFilename,
+        GL_VERTEX_SHADER);
+    ShaderPtr fs = Shader::CreateFromFile(fragShaderFilename,
+        GL_FRAGMENT_SHADER);
+    if (!vs || !fs)
+        return nullptr;
+    return std::move(Create({vs, fs}));
+}
+
 //Shared Pointer로 참조하는 shader들을 받아와서 link하는 과정
 bool Program::Link(  
     const std::vector<ShaderPtr>& shaders) {
@@ -44,6 +56,22 @@ void Program::Use() const{
 void Program::SetUniform(const std::string& name, int value) const {
     auto loc = glGetUniformLocation(m_program, name.c_str());
     glUniform1i(loc, value);
+}
+
+void Program::SetUniform(const std::string& name, float value) const {
+    auto loc = glGetUniformLocation(m_program, name.c_str());
+    glUniform1f(loc, value);
+}
+
+void Program::SetUniform(const std::string& name, const glm::vec3& value) const {
+    auto loc = glGetUniformLocation(m_program, name.c_str());
+    glUniform3fv(loc, 1, glm::value_ptr(value));
+}
+
+void Program::SetUniform(const std::string& name,
+    const glm::vec4& value) const {
+    auto loc = glGetUniformLocation(m_program, name.c_str());
+    glUniform4fv(loc, 1, glm::value_ptr(value));
 }
 
 void Program::SetUniform(const std::string& name, const glm::mat4& value) const {
