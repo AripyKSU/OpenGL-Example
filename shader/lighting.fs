@@ -7,7 +7,8 @@ out vec4 fragColor;
 uniform vec3 viewPos;
 
 struct Light {
-    vec3 direction;
+    vec3 position;
+    vec3 attenuation;
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
@@ -26,8 +27,13 @@ void main() {
     //ambient
     vec3 ambient = texColor * light.ambient;
 
+    //attenuation 계산
+    float dist = length(light.position - position);
+    vec3 distPoly = vec3(1.0, dist, dist*dist);
+    float attenuation = 1.0 / dot(distPoly, light.attenuation);
+
     //diffuse
-    vec3 lightDir = normalize(-light.direction);
+    vec3 lightDir = (light.position - position) / dist;
     //vertex shader에서 계산된 normal은 rasterization 
     //되는 과정에서 선형 보간이 진행됨 -> Unit Vector 보장 x, 다시 normalize 필요
     vec3 pixelNorm = normalize(normal);
@@ -41,6 +47,6 @@ void main() {
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
     vec3 specular = spec * specColor * light.specular;
  
-    vec3 result = ambient + diffuse + specular;
+    vec3 result = (ambient + diffuse + specular) * attenuation;
     fragColor = vec4(result, 1.0);
 }
