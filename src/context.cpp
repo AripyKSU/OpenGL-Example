@@ -173,15 +173,18 @@ void Context::Render() {
 
         if (ImGui::CollapsingHeader("light", ImGuiTreeNodeFlags_DefaultOpen)) {
             ImGui::DragFloat3("l.position", glm::value_ptr(m_light.position), 0.01f);
+            ImGui::DragFloat3("l.direction", glm::value_ptr(m_light.direction), 0.01f);
+            ImGui::DragFloat2("l.cutoff", glm::value_ptr(m_light.cutoff), 0.5f, 0.0f, 180.0f);
+            ImGui::DragFloat("l.distance", &m_light.distance, 0.5f, 0.0f, 3000.0f);
             ImGui::ColorEdit3("l.ambient", glm::value_ptr(m_light.ambient));
             ImGui::ColorEdit3("l.diffuse", glm::value_ptr(m_light.diffuse));
             ImGui::ColorEdit3("l.specular", glm::value_ptr(m_light.specular));
         }
         
         if (ImGui::CollapsingHeader("material", ImGuiTreeNodeFlags_DefaultOpen)) {
-            // ImGui::ColorEdit3("m.ambient", glm::value_ptr(m_material.ambient));
-            // ImGui::ColorEdit3("m.diffuse", glm::value_ptr(m_material.diffuse));
-            // ImGui::ColorEdit3("m.specular", glm::value_ptr(m_material.specular));
+            //ImGui::ColorEdit3("m.ambient", glm::value_ptr(m_material.ambient));
+            //ImGui::ColorEdit3("m.diffuse", glm::value_ptr(m_material.diffuse));
+            //ImGui::ColorEdit3("m.specular", glm::value_ptr(m_material.specular));
             ImGui::DragFloat("m.shininess", &m_material.shininess, 1.0f, 1.0f, 256.0f);
         }
 
@@ -230,6 +233,10 @@ void Context::Render() {
     m_program->Use();
     m_program->SetUniform("viewPos", m_cameraPos);
    	m_program->SetUniform("light.position", m_light.position);
+    m_program->SetUniform("light.direction", m_light.direction);
+    m_program->SetUniform("light.cutoff", glm::vec2(
+        cosf(glm::radians(m_light.cutoff[0])),
+        cosf(glm::radians(m_light.cutoff[0] + m_light.cutoff[1]))));
     m_program->SetUniform("light.attenuation", GetAttenuationCoeff(m_light.distance));
     m_program->SetUniform("light.ambient", m_light.ambient);
     m_program->SetUniform("light.diffuse", m_light.diffuse);
