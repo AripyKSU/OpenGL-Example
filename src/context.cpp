@@ -10,77 +10,12 @@ ContextUPtr Context::Create() {
 }
 
 bool Context::Init() {
-    //정점 좌표 입력 (VBO)
-    float vertices[] = { // pos.xyz, normal.xyz, texcoord.uv
-        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f,
-        0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 1.0f, 0.0f,
-        0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 0.0f, 1.0f,
+    m_box = Mesh::CreateBox();
 
-        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f,
-        0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 1.0f, 0.0f,
-        0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f, 0.0f, 1.0f,
-
-        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f,
-        -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f, 1.0f, 1.0f,
-        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f,
-        -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f, 0.0f, 0.0f,
-
-        0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f,
-        0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f, 1.0f, 1.0f,
-        0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f,
-        0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f, 0.0f, 0.0f,
-
-        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f,
-        0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f, 1.0f, 1.0f,
-        0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f, 0.0f, 0.0f,
-
-        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f,
-        0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f, 1.0f, 1.0f,
-        0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f, 0.0f, 0.0f,
-    };
-    //element buffer object (VAO)
-    uint32_t indices[] = {
-        0,  2,  1,  2,  0,  3,
-        4,  5,  6,  6,  7,  4,
-        8,  9, 10, 10, 11,  8,
-        12, 14, 13, 14, 12, 15,
-        16, 17, 18, 18, 19, 16,
-        20, 22, 21, 22, 20, 23,
-    };
-
-    //VAO 먼저 선언
-    m_vertexLayout = VertexLayout::Create();
-
-    //VertexBuffer 생성 후 바인딩
-    //vertices를 m_vertexBuffer에 복사
-    //형식은 STATIC | DYNAMIC | STREAM  /  DRAW | READ | COPY 의 조합
-    m_vertexBuffer = Buffer::CreateWithData(GL_ARRAY_BUFFER, GL_STATIC_DRAW, 
-        vertices, sizeof(float) * 8 * 6 * 4);
+    m_model = Model::Load("./model/backpack.obj");
+    if (!m_model)
+        return false;
     
-    //position
-    //처음 0은 shader의 location, float값 3개, stride=float 8개, offset 0
-    m_vertexLayout->SetAttrib(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, 0);
-    //normal
-    //attribute 1, float 3개, stride = float 8개, offset = float[3]부터
-    m_vertexLayout->SetAttrib(1, 3, GL_FLOAT, GL_FALSE, sizeof(float) * 8, sizeof(float) * 3);
-    //texture coordinate
-    m_vertexLayout->SetAttrib(2, 2, GL_FLOAT, GL_FALSE,sizeof(float) * 8, sizeof(float) * 6);
-    //index buffer 생성 및 초기화
-    m_indexBuffer = Buffer::CreateWithData(GL_ELEMENT_ARRAY_BUFFER, GL_STATIC_DRAW, 
-        indices, sizeof(uint32_t)*36);
-
-    // //shader get
-    // ShaderPtr vertShader = Shader::CreateFromFile("./shader/lighting.vs", GL_VERTEX_SHADER);
-    // ShaderPtr fragShader = Shader::CreateFromFile("./shader/lighting.fs", GL_FRAGMENT_SHADER);
-    // if (!vertShader || !fragShader)
-    //     return false;
-    // SPDLOG_INFO("vertex shader id: {}", vertShader->Get());
-    // SPDLOG_INFO("fragment shader id: {}", fragShader->Get());
-
     //program get
     m_simpleProgram = Program::Create("./shader/simple.vs", "./shader/simple.fs");
     if (!m_simpleProgram)
@@ -90,17 +25,10 @@ bool Context::Init() {
         return false;
     SPDLOG_INFO("program id: {}", m_program->Get());
 
-    /*  
-        //simple.fs의 uniform var이름을 통해 loc(위치)를 받아옴
-        auto loc = glGetUniformLocation(m_program->Get(), "color");
-        m_program->Use();
-        glUniform4f(loc, 1.0f, 1.0f, 0.0f, 1.0f); 
-    */ 
-
     glClearColor(0.1f, 0.2f, 0.3f, 0.0f);
 
     //image load
-    auto image = Image::Load("./images/container.jpg");
+    auto image = Image::Load("./image/container.jpg");
     if (!image) 
         return false;
     SPDLOG_INFO("image: {}x{}, {} channels",
@@ -109,13 +37,18 @@ bool Context::Init() {
     //ImageUPtr에서 Image*를 얻기 위해 get() 사용
     m_texture = Texture::CreateFromImage(image.get());
 
-    auto image2 = Image::Load("./images/awesomeface.png");
+    auto image2 = Image::Load("./image/awesomeface.png");
     if (!image2) 
         return false;
     m_texture2 = Texture::CreateFromImage(image2.get());
 
-    m_material.diffuse = Texture::CreateFromImage(Image::Load("./images/container2.png").get());
-    m_material.specular = Texture::CreateFromImage(Image::Load("./images/container2_specular.png").get());
+    // m_material.diffuse = Texture::CreateFromImage(Image::Load("./image/container2.png").get());
+    // m_material.specular = Texture::CreateFromImage(Image::Load("./image/container2_specular.png").get());
+    
+    m_material.diffuse = Texture::CreateFromImage(
+        Image::CreateSingleColorImage(4, 4, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)).get());
+    m_material.specular = Texture::CreateFromImage(
+        Image::CreateSingleColorImage(4, 4, glm::vec4(0.5f, 0.5f, 0.5f, 1.0f)).get());
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, m_texture->Get());
@@ -125,16 +58,6 @@ bool Context::Init() {
     m_program->Use();
     m_program->SetUniform("tex", 0);
     m_program->SetUniform("tex2", 1);
-
-    // // x축으로 -55도 회전
-    // auto model = glm::rotate(glm::mat4(1.0f), glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    // // 카메라는 원점으로부터 z축 방향으로 -3만큼 떨어짐
-    // auto view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -3.0f));
-    // // 종횡비 window_width : window_height (cmake에서 정의), 세로화각 45도의 원근 투영
-    // auto projection = glm::perspective(glm::radians(45.0f), (float)WINDOW_WIDTH / (float)WINDOW_HEIGHT, 0.01f, 10.0f);
-    // //mvp matrix 생성
-    // auto transform = projection * view * model;
-    // m_program->SetUniform("transform", transform);
 
     return true;
 }
@@ -179,6 +102,7 @@ void Context::Render() {
             ImGui::ColorEdit3("l.ambient", glm::value_ptr(m_light.ambient));
             ImGui::ColorEdit3("l.diffuse", glm::value_ptr(m_light.diffuse));
             ImGui::ColorEdit3("l.specular", glm::value_ptr(m_light.specular));
+            ImGui::Checkbox("flash light", &m_flashLightMode);
         }
         
         if (ImGui::CollapsingHeader("material", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -221,19 +145,26 @@ void Context::Render() {
 
     auto view = glm::lookAt(m_cameraPos, m_cameraPos + m_cameraFront, m_cameraUp);
 
-    //광원 그리기
-    auto lightModelTransform =
-        glm::translate(glm::mat4(1.0), m_light.position) *
-        glm::scale(glm::mat4(1.0), glm::vec3(0.1f));
-    m_simpleProgram->Use();
-    m_simpleProgram->SetUniform("color", glm::vec4(m_light.ambient + m_light.diffuse, 1.0f));
-    m_simpleProgram->SetUniform("transform", projection * view * lightModelTransform);
-    glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+    glm::vec3 lightPos = m_light.position;
+    glm::vec3 lightDir = m_light.direction;
+    if(m_flashLightMode) {
+        lightPos = m_cameraPos;
+        lightDir = m_cameraFront;
+    } else {
+        //광원 그리기
+        auto lightModelTransform =
+            glm::translate(glm::mat4(1.0), m_light.position) *
+            glm::scale(glm::mat4(1.0), glm::vec3(0.1f));
+        m_simpleProgram->Use();
+        m_simpleProgram->SetUniform("color", glm::vec4(m_light.ambient + m_light.diffuse, 1.0f));
+        m_simpleProgram->SetUniform("transform", projection * view * lightModelTransform);
+        m_box->Draw(m_program.get());
+    }
 
     m_program->Use();
     m_program->SetUniform("viewPos", m_cameraPos);
-   	m_program->SetUniform("light.position", m_light.position);
-    m_program->SetUniform("light.direction", m_light.direction);
+    m_program->SetUniform("light.position", lightPos);
+    m_program->SetUniform("light.direction", lightDir);
     m_program->SetUniform("light.cutoff", glm::vec2(
         cosf(glm::radians(m_light.cutoff[0])),
         cosf(glm::radians(m_light.cutoff[0] + m_light.cutoff[1]))));
@@ -241,25 +172,21 @@ void Context::Render() {
     m_program->SetUniform("light.ambient", m_light.ambient);
     m_program->SetUniform("light.diffuse", m_light.diffuse);
     m_program->SetUniform("light.specular", m_light.specular);
+
     m_program->SetUniform("material.diffuse", 0);
     m_program->SetUniform("material.specular", 1);
     m_program->SetUniform("material.shininess", m_material.shininess);
-
+    
     glActiveTexture(GL_TEXTURE0);
     m_material.diffuse->Bind();
     glActiveTexture(GL_TEXTURE1);
     m_material.specular->Bind();
 
-    for (size_t i = 0; i < cubePositions.size(); i++){
-        auto& pos = cubePositions[i];
-        auto model = glm::translate(glm::mat4(1.0f), pos);
-        model = glm::rotate(model, glm::radians((m_animation ? (float)glfwGetTime() : 0.0f)
-            * 120.0f + 20.0f * (float)i), glm::vec3(1.0f, 0.5f, 0.0f));
-        auto transform = projection * view * model;
-        m_program->SetUniform("transform", transform);
-        m_program->SetUniform("modelTransform", model);
-        glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-    }
+    auto modelTransform = glm::mat4(1.0f);
+    auto transform = projection * view * modelTransform;
+    m_program->SetUniform("transform", transform);
+    m_program->SetUniform("modelTransform", modelTransform);
+    m_model->Draw(m_program.get());
 
     //type, 점 offset, 점 개수: 현재 VAO에 binding 된 VBO로 부터 받아옴
     //glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
