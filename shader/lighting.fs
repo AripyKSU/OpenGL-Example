@@ -7,7 +7,7 @@ out vec4 fragColor;
 uniform vec3 viewPos;
 
 struct Light {
-    vec3 position;
+    vec3 direction;
     vec3 ambient;
     vec3 diffuse;
     vec3 specular;
@@ -27,7 +27,7 @@ void main() {
     vec3 ambient = texColor * light.ambient;
 
     //diffuse
-    vec3 lightDir = normalize(light.position - position);
+    vec3 lightDir = normalize(-light.direction);
     //vertex shader에서 계산된 normal은 rasterization 
     //되는 과정에서 선형 보간이 진행됨 -> Unit Vector 보장 x, 다시 normalize 필요
     vec3 pixelNorm = normalize(normal);
