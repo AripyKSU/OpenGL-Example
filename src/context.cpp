@@ -11,32 +11,23 @@ ContextUPtr Context::Create() {
 
 bool Context::Init() {
     m_box = Mesh::CreateBox();
-    
+    m_plane = Mesh::CreatePlane();
+    m_windowTexture = Texture::CreateFromImage(
+        Image::Load("./image/blending_transparent_window.png").get());
+
     //program get
     m_simpleProgram = Program::Create("./shader/simple.vs", "./shader/simple.fs");
     if (!m_simpleProgram)
         return false;
     m_program = Program::Create("./shader/lighting.vs", "./shader/lighting.fs");
-        if (!m_program)
+    if (!m_program)
         return false;
     SPDLOG_INFO("program id: {}", m_program->Get());
+    m_textureProgram = Program::Create("./shader/texture.vs", "./shader/texture.fs");
+    if (!m_textureProgram)
+        return false;
 
     glClearColor(0.1f, 0.2f, 0.3f, 0.0f);
-
-    //image load
-    auto image = Image::Load("./image/container.jpg");
-    if (!image) 
-        return false;
-    SPDLOG_INFO("image: {}x{}, {} channels",
-        image->GetWidth(), image->GetHeight(), image->GetChannelCount());
-
-    //ImageUPtr에서 Image*를 얻기 위해 get() 사용
-    m_texture = Texture::CreateFromImage(image.get());
-
-    auto image2 = Image::Load("./image/awesomeface.png");
-    if (!image2) 
-        return false;
-    m_texture2 = Texture::CreateFromImage(image2.get());
 
     TexturePtr darkGrayTexture = Texture::CreateFromImage(
         Image::CreateSingleColorImage(4, 4, glm::vec4(0.2f, 0.2f, 0.2f, 1.0f)).get());
@@ -184,12 +175,6 @@ void Context::Render() {
     m_box1Material->SetToProgram(m_program.get());
     m_box->Draw(m_program.get());
 
-    glEnable(GL_STENCIL_TEST);
-    //func이 always이므로 항상 gl_replace 실행(depth 통과시)
-    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
-    glStencilFunc(GL_ALWAYS, 1, 0xFF);
-    glStencilMask(0xFF);
-
     modelTransform =
         glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.75f, 2.0f)) *
         glm::rotate(glm::mat4(1.0f), glm::radians(20.0f), glm::vec3(0.0f, 1.0f, 0.0f)) *
@@ -199,23 +184,34 @@ void Context::Render() {
     m_program->SetUniform("modelTransform", modelTransform);
     m_box2Material->SetToProgram(m_program.get());
     m_box->Draw(m_program.get());
-
-    glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
-    glStencilMask(0x00);
-    glDisable(GL_DEPTH_TEST);
-    m_simpleProgram->Use();
-    m_simpleProgram->SetUniform("color", glm::vec4(1.0f, 1.0f, 0.5f, 1.0f));
-    m_simpleProgram->SetUniform("transform", transform *
-        glm::scale(glm::mat4(1.0f), glm::vec3(1.05f, 1.05f, 1.05f)));
-    m_box->Draw(m_simpleProgram.get());
-
-    glEnable(GL_DEPTH_TEST);
-    glDisable(GL_STENCIL_TEST);
-    glStencilFunc(GL_ALWAYS, 1, 0xFF);
-    glStencilMask(0xFF);
     
-    //type, 점 offset, 점 개수: 현재 VAO에 binding 된 VBO로 부터 받아옴
-    //glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // glEnable(GL_CULL_FACE);
+    // glCullFace(GL_BACK);
+
+    m_textureProgram->Use();
+    m_windowTexture->Bind();
+    m_textureProgram->SetUniform("tex", 0);
+
+    modelTransform =
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 4.0f));
+    transform = projection * view * modelTransform;
+    m_textureProgram->SetUniform("transform", transform);
+    m_plane->Draw(m_textureProgram.get());
+
+    modelTransform =
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.2f, 0.5f, 5.0f));
+    transform = projection * view * modelTransform;
+    m_textureProgram->SetUniform("transform", transform);
+    m_plane->Draw(m_textureProgram.get());
+
+    modelTransform =
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.4f, 0.5f, 6.0f));
+    transform = projection * view * modelTransform;
+    m_textureProgram->SetUniform("transform", transform);
+    m_plane->Draw(m_textureProgram.get());
 }
 
 //key 입력을 받아 카메라를 이동
