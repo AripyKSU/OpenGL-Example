@@ -1,5 +1,13 @@
 #include "texture.h"
 
+TextureUPtr Texture::Create(int width, int height, uint32_t format) {
+    auto texture = TextureUPtr(new Texture());
+    texture->CreateTexture();
+    texture->SetTextureFormat(width, height, format);
+    texture->SetFilter(GL_LINEAR, GL_LINEAR);
+    return std::move(texture);
+}
+
 TextureUPtr Texture::CreateFromImage(const Image* image) {
     auto texture = TextureUPtr(new Texture());
     texture->CreateTexture();
@@ -46,13 +54,26 @@ void Texture::SetTextureFromImage(const Image* image) {
         case 3: format = GL_RGB; break;
     }
     
-    //target, gpu 쪽 texture data:glGenTexture에 만들 것, cpu 쪽 data: image에 로딩했던 데이터 
-    //두 번째 0은 border 사이즈
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
-        image->GetWidth(), image->GetHeight(), 0,
+    m_width = image->GetWidth();
+    m_height = image->GetHeight();
+    m_format = format;
+    
+    glTexImage2D(GL_TEXTURE_2D, 0, m_format,
+        m_width, m_height, 0,
         format, GL_UNSIGNED_BYTE,
         image->GetData());
 
     //Mipmap 같이 생성, 메모리 1/3정도 더 소요, 화면 사이즈를 줄여도 더 화질 개선
     glGenerateMipmap(GL_TEXTURE_2D);
+}
+
+void Texture::SetTextureFormat(int width, int height, uint32_t format) {
+    m_width = width;
+    m_height = height;
+    m_format = format;
+
+    glTexImage2D(GL_TEXTURE_2D, 0, m_format,
+        m_width, m_height, 0,
+        m_format, GL_UNSIGNED_BYTE,
+        nullptr);
 }

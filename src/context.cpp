@@ -26,6 +26,12 @@ bool Context::Init() {
     m_textureProgram = Program::Create("./shader/texture.vs", "./shader/texture.fs");
     if (!m_textureProgram)
         return false;
+    // m_postProgram = Program::Create("./shader/texture.vs", "./shader/invert.fs");
+    // if (!m_postProgram)
+    //     return false;
+    m_postProgram = Program::Create("./shader/texture.vs", "./shader/gamma.fs");
+    if (!m_postProgram)
+        return false;
 
     glClearColor(0.1f, 0.2f, 0.3f, 0.0f);
 
@@ -59,6 +65,7 @@ void Context::Render() {
         if (ImGui::ColorEdit4("clear color", glm::value_ptr(m_clearColor))) {
             glClearColor(m_clearColor.r, m_clearColor.g, m_clearColor.b, m_clearColor.a);
         }
+        ImGui::DragFloat("gamma", &m_gamma, 0.01f, 0.0f, 2.0f);
 
         ImGui::Separator();
 
@@ -97,25 +104,17 @@ void Context::Render() {
         }
 
         ImGui::Checkbox("animation", &m_animation);
+
+        float aspectRatio = (float)m_width / (float)m_height;
+        ImGui::Image((ImTextureID)m_framebuffer->GetColorAttachment()->Get(), ImVec2(150 * aspectRatio, 150));
     }
     ImGui::End();
+
+    m_framebuffer->Bind();
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     //깊이 버퍼 활성화
     glEnable(GL_DEPTH_TEST);
-
-    std::vector<glm::vec3> cubePositions = {
-        glm::vec3( 0.0f, 0.0f, 0.0f),
-        glm::vec3( 2.0f, 5.0f, -15.0f),
-        glm::vec3(-1.5f, -2.2f, -2.5f),
-        glm::vec3(-3.8f, -2.0f, -12.3f),
-        glm::vec3( 2.4f, -0.4f, -3.5f),
-        glm::vec3(-1.7f, 3.0f, -7.5f),
-        glm::vec3( 1.3f, -2.0f, -2.5f),
-        glm::vec3( 1.5f, 2.0f, -2.5f),
-        glm::vec3( 1.5f, 0.2f, -1.5f),
-        glm::vec3(-1.3f, 1.0f, -1.5f),
-    };
 
     m_cameraFront =
         glm::rotate(glm::mat4(1.0f),
@@ -212,6 +211,28 @@ void Context::Render() {
     transform = projection * view * modelTransform;
     m_textureProgram->SetUniform("transform", transform);
     m_plane->Draw(m_textureProgram.get());
+
+    Framebuffer::BindToDefault();
+
+    // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    // m_textureProgram->Use();
+    // m_textureProgram->SetUniform("transform",
+    //     glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 1.0f)));
+    // m_framebuffer->GetColorAttachment()->Bind();
+    // m_textureProgram->SetUniform("tex", 0);
+    // m_plane->Draw(m_textureProgram.get());
+    // Framebuffer::BindToDefault();
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    m_postProgram->Use();
+    m_postProgram->SetUniform("transform",
+        glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 1.0f)));
+    m_postProgram->SetUniform("gamma", m_gamma);
+    m_framebuffer->GetColorAttachment()->Bind();
+    m_postProgram->SetUniform("tex", 0);
+    m_plane->Draw(m_postProgram.get()); 
 }
 
 //key 입력을 받아 카메라를 이동
@@ -242,6 +263,8 @@ void Context::Reshape(int width, int height) {
     m_width = width;
     m_height = height;
     glViewport(0, 0, m_width, m_height);
+
+    m_framebuffer = Framebuffer::Create(Texture::Create(width, height, GL_RGBA));
 }
 
 void Context::MouseMove(double x, double y) {
