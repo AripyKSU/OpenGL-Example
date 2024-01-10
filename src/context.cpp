@@ -109,7 +109,7 @@ void Context::Render() {
     }
     ImGui::End();
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     //깊이 버퍼 활성화
     glEnable(GL_DEPTH_TEST);
 
@@ -184,12 +184,14 @@ void Context::Render() {
     m_box1Material->SetToProgram(m_program.get());
     m_box->Draw(m_program.get());
 
-    // modelTransform =
-    //     glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.75f, 2.0f)) *
-    //     glm::rotate(glm::mat4(1.0f), glm::radians(20.0f), glm::vec3(0.0f, 1.0f, 0.0f)) *
-    //     glm::scale(glm::mat4(1.0f), glm::vec3(1.5f, 1.5f, 1.5f));
+    glEnable(GL_STENCIL_TEST);
+    //func이 always이므로 항상 gl_replace 실행(depth 통과시)
+    glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE);
+    glStencilFunc(GL_ALWAYS, 1, 0xFF);
+    glStencilMask(0xFF);
+
     modelTransform =
-        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.749f, 2.0f)) *
+        glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.75f, 2.0f)) *
         glm::rotate(glm::mat4(1.0f), glm::radians(20.0f), glm::vec3(0.0f, 1.0f, 0.0f)) *
         glm::scale(glm::mat4(1.0f), glm::vec3(1.5f, 1.5f, 1.5f));
     transform = projection * view * modelTransform;
@@ -197,6 +199,20 @@ void Context::Render() {
     m_program->SetUniform("modelTransform", modelTransform);
     m_box2Material->SetToProgram(m_program.get());
     m_box->Draw(m_program.get());
+
+    glStencilFunc(GL_NOTEQUAL, 1, 0xFF);
+    glStencilMask(0x00);
+    glDisable(GL_DEPTH_TEST);
+    m_simpleProgram->Use();
+    m_simpleProgram->SetUniform("color", glm::vec4(1.0f, 1.0f, 0.5f, 1.0f));
+    m_simpleProgram->SetUniform("transform", transform *
+        glm::scale(glm::mat4(1.0f), glm::vec3(1.05f, 1.05f, 1.05f)));
+    m_box->Draw(m_simpleProgram.get());
+
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_STENCIL_TEST);
+    glStencilFunc(GL_ALWAYS, 1, 0xFF);
+    glStencilMask(0xFF);
     
     //type, 점 offset, 점 개수: 현재 VAO에 binding 된 VBO로 부터 받아옴
     //glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
