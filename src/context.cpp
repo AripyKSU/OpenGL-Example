@@ -10,6 +10,7 @@ ContextUPtr Context::Create() {
 }
 
 bool Context::Init() {
+    glEnable(GL_MULTISAMPLE);
     m_box = Mesh::CreateBox();
     m_plane = Mesh::CreatePlane();
     m_windowTexture = Texture::CreateFromImage(
@@ -55,6 +56,48 @@ bool Context::Init() {
     m_box2Material->diffuse = Texture::CreateFromImage(Image::Load("./image/container2.png").get());
     m_box2Material->specular = Texture::CreateFromImage(Image::Load("./image/container2_specular.png").get());
     m_box2Material->shininess = 64.0f;
+
+    auto cubeRight = Image::Load("./image/skybox/right.jpg", false);
+    auto cubeLeft = Image::Load("./image/skybox/left.jpg", false);
+    auto cubeTop = Image::Load("./image/skybox/top.jpg", false);
+    auto cubeBottom = Image::Load("./image/skybox/bottom.jpg", false);
+    auto cubeFront = Image::Load("./image/skybox/front.jpg", false);
+    auto cubeBack = Image::Load("./image/skybox/back.jpg", false);
+    //오른손 좌표계 엄지x, 검지y, 중지z로 +-구분
+    m_cubeTexture = CubeTexture::CreateFromImages({
+        cubeRight.get(),
+        cubeLeft.get(),
+        cubeTop.get(),
+        cubeBottom.get(),
+        cubeFront.get(),
+        cubeBack.get(),
+    });
+    m_skyboxProgram = Program::Create("./shader/skybox.vs", "./shader/skybox.fs");
+    m_envMapProgram = Program::Create("./shader/env_map.vs", "./shader/env_map.fs");
+
+    m_grassTexture = Texture::CreateFromImage(Image::Load("./image/grass.png").get());
+    m_grassProgram = Program::Create("./shader/grass.vs", "./shader/grass.fs");
+    m_grassPos.resize(10000);
+    for (size_t i = 0; i < m_grassPos.size(); i++) {
+        m_grassPos[i].x = ((float)rand() / (float)RAND_MAX * 2.0f - 1.0f) * 5.0f;
+        m_grassPos[i].z = ((float)rand() / (float)RAND_MAX * 2.0f - 1.0f) * 5.0f;
+        m_grassPos[i].y = glm::radians((float)rand() / (float)RAND_MAX * 360.0f);
+    }
+    m_grassInstance = VertexLayout::Create();
+    m_grassInstance->Bind();
+    //plane의 vbo를 기준으로 0,1,2 attribute setting
+    m_plane->GetVertexBuffer()->Bind();
+    m_grassInstance->SetAttrib(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), 0);
+    m_grassInstance->SetAttrib(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), offsetof(Vertex, normal));
+    m_grassInstance->SetAttrib(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), offsetof(Vertex, texCoord));
+    //계산된 grassPos로 3번 offset attribute setting
+    m_grassPosBuffer = Buffer::CreateWithData(GL_ARRAY_BUFFER, GL_STATIC_DRAW,
+            m_grassPos.data(), sizeof(glm::vec3), m_grassPos.size());
+    m_grassPosBuffer->Bind();
+    m_grassInstance->SetAttrib(3, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), 0);
+    //3번 attribute는 instanceId가 바뀔 때마다 달라짐
+    glVertexAttribDivisor(3, 1);
+    m_plane->GetIndexBuffer()->Bind();
 
     return true;
 }
@@ -110,7 +153,7 @@ void Context::Render() {
     }
     ImGui::End();
 
-    m_framebuffer->Bind();
+    //m_framebuffer->Bind();
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     //깊이 버퍼 활성화
@@ -124,8 +167,18 @@ void Context::Render() {
         glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
 
     auto projection = glm::perspective(glm::radians(45.0f),
-        (float)m_width / (float)m_height, 0.01f, 30.0f);
+        (float)m_width / (float)m_height, 0.01f, 100.0f);
     auto view = glm::lookAt(m_cameraPos, m_cameraPos + m_cameraFront, m_cameraUp);
+
+    //skybox
+    auto skyboxModelTransform =
+      glm::translate(glm::mat4(1.0), m_cameraPos) *
+      glm::scale(glm::mat4(1.0), glm::vec3(50.0f));
+    m_skyboxProgram->Use();
+    m_cubeTexture->Bind();
+    m_skyboxProgram->SetUniform("skybox", 0);
+    m_skyboxProgram->SetUniform("transform", projection * view * skyboxModelTransform);
+    m_box->Draw(m_skyboxProgram.get());
 
     glm::vec3 lightPos = m_light.position;
     glm::vec3 lightDir = m_light.direction;
@@ -183,12 +236,23 @@ void Context::Render() {
     m_program->SetUniform("modelTransform", modelTransform);
     m_box2Material->SetToProgram(m_program.get());
     m_box->Draw(m_program.get());
+
+    //환경이 반사되는 cube object
+    modelTransform =
+        glm::translate(glm::mat4(1.0f), glm::vec3(1.0f, 0.75f, -2.0f)) *
+        glm::rotate(glm::mat4(1.0f), glm::radians(40.0f), glm::vec3(0.0f, 1.0f, 0.0f)) *
+        glm::scale(glm::mat4(1.0f), glm::vec3(1.5f, 1.5f, 1.5f));
+    m_envMapProgram->Use();
+    m_envMapProgram->SetUniform("model", modelTransform);
+    m_envMapProgram->SetUniform("view", view);
+    m_envMapProgram->SetUniform("projection", projection);
+    m_envMapProgram->SetUniform("cameraPos", m_cameraPos);
+    m_cubeTexture->Bind();
+    m_envMapProgram->SetUniform("skybox", 0);
+    m_box->Draw(m_envMapProgram.get());
     
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    // glEnable(GL_CULL_FACE);
-    // glCullFace(GL_BACK);
 
     m_textureProgram->Use();
     m_windowTexture->Bind();
@@ -212,27 +276,29 @@ void Context::Render() {
     m_textureProgram->SetUniform("transform", transform);
     m_plane->Draw(m_textureProgram.get());
 
-    Framebuffer::BindToDefault();
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    m_grassProgram->Use();
+    m_grassProgram->SetUniform("tex", 0);
+    m_grassTexture->Bind();
+    m_grassInstance->Bind();
+    modelTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.5f, 0.0f));
+    transform = projection * view * modelTransform;
+    m_grassProgram->SetUniform("transform", transform);
+    glDrawElementsInstanced(GL_TRIANGLES, m_plane->GetIndexBuffer()->GetCount(),
+        GL_UNSIGNED_INT, 0, m_grassPosBuffer->GetCount());
+
+    // Framebuffer::BindToDefault();
 
     // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-    // m_textureProgram->Use();
-    // m_textureProgram->SetUniform("transform",
+    // m_postProgram->Use();
+    // m_postProgram->SetUniform("transform",
     //     glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 1.0f)));
+    // m_postProgram->SetUniform("gamma", m_gamma);
     // m_framebuffer->GetColorAttachment()->Bind();
-    // m_textureProgram->SetUniform("tex", 0);
-    // m_plane->Draw(m_textureProgram.get());
-    // Framebuffer::BindToDefault();
-
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
-    m_postProgram->Use();
-    m_postProgram->SetUniform("transform",
-        glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 1.0f)));
-    m_postProgram->SetUniform("gamma", m_gamma);
-    m_framebuffer->GetColorAttachment()->Bind();
-    m_postProgram->SetUniform("tex", 0);
-    m_plane->Draw(m_postProgram.get()); 
+    // m_postProgram->SetUniform("tex", 0);
+    // m_plane->Draw(m_postProgram.get()); 
 }
 
 //key 입력을 받아 카메라를 이동

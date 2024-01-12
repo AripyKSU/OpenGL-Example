@@ -6,7 +6,7 @@
 CLASS_PTR(Image)
 class Image {
 public:
-    static ImageUPtr Load(const std::string& filepath);
+    static ImageUPtr Load(const std::string& filepath, bool flipVertical = true);
     //빈 메모리 공간 할당 받는 함수
     static ImageUPtr Create(int width, int height, int channelCount = 4);
     static ImageUPtr CreateSingleColorImage(int width, int height, const glm::vec4& color);
@@ -21,7 +21,7 @@ public:
 
 private:
     Image() {};
-    bool LoadWithStb(const std::string& filepath);
+    bool LoadWithStb(const std::string& filepath, bool flipVertical);
     //Create 함수에서 사용
     bool Allocate(int width, int height, int channelCount);
     int m_width { 0 };
