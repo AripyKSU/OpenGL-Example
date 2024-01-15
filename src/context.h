@@ -71,6 +71,7 @@ private:
     };
     Light m_light;
     bool m_flashLightMode { false };
+    bool m_blinn { false };
 
     // camera parameter
     bool m_cameraControl { false };
