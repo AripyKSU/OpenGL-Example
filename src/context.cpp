@@ -27,9 +27,6 @@ bool Context::Init() {
     m_textureProgram = Program::Create("./shader/texture.vs", "./shader/texture.fs");
     if (!m_textureProgram)
         return false;
-    // m_postProgram = Program::Create("./shader/texture.vs", "./shader/invert.fs");
-    // if (!m_postProgram)
-    //     return false;
     m_postProgram = Program::Create("./shader/texture.vs", "./shader/gamma.fs");
     if (!m_postProgram)
         return false;
@@ -101,9 +98,12 @@ bool Context::Init() {
 
     //shadowMap 초기화
     m_shadowMap = ShadowMap::Create(1024, 1024);
-    m_lightingShadowProgram = Program::Create(
-        "./shader/lighting_shadow.vs", "./shader/lighting_shadow.fs");
+    m_lightingShadowProgram = Program::Create("./shader/lighting_shadow.vs", "./shader/lighting_shadow.fs");
 
+    //normalMap 초기화
+    m_brickDiffuseTexture = Texture::CreateFromImage(Image::Load("./image/brickwall.jpg", false).get());
+    m_brickNormalTexture = Texture::CreateFromImage(Image::Load("./image/brickwall_normal.jpg", false).get());
+    m_normalProgram = Program::Create("./shader/normal.vs", "./shader/normal.fs");
     return true;
 }
 
@@ -245,6 +245,22 @@ void Context::Render() {
     glActiveTexture(GL_TEXTURE0);
 
     DrawScene(view, projection, m_lightingShadowProgram.get());
+
+    //normal map brick 그리기
+    auto modelTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 3.0f, 0.0f));
+    m_normalProgram->Use();
+    m_normalProgram->SetUniform("viewPos", m_cameraPos);
+    m_normalProgram->SetUniform("lightPos", m_light.position);
+    glActiveTexture(GL_TEXTURE0);
+    m_brickDiffuseTexture->Bind();
+    m_normalProgram->SetUniform("diffuse", 0);
+    glActiveTexture(GL_TEXTURE1);
+    m_brickNormalTexture->Bind();
+    m_normalProgram->SetUniform("normalMap", 1);
+    glActiveTexture(GL_TEXTURE0);
+    m_normalProgram->SetUniform("modelTransform", modelTransform);
+    m_normalProgram->SetUniform("transform", projection * view * modelTransform);
+    m_plane->Draw(m_normalProgram.get());
 }
 
 //key 입력을 받아 카메라를 이동

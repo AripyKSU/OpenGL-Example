@@ -52,7 +52,7 @@ float ShadowCalculation(vec4 fragPosLight, vec3 normal, vec3 lightDir) {
         }
     }
     shadow /= 9.0;
-    return shadow;
+    return shadow; 
 }
 
 void main() {
