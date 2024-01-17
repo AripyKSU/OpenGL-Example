@@ -78,9 +78,20 @@ void Texture::SetTextureFormat(int width, int height, uint32_t format, uint32_t 
     m_format = format;
     m_type = type;
 
+    //G-buffer를 구현하기 위해 image format을 인풋과 달리 RGB를 사용하게 함 
+    GLenum imageFormat = GL_RGBA;
+    if (m_format == GL_DEPTH_COMPONENT) {
+        imageFormat = GL_DEPTH_COMPONENT;        
+    }
+    else if (m_format == GL_RGB ||
+        m_format == GL_RGB16F ||
+        m_format == GL_RGB32F) {
+        imageFormat = GL_RGB;
+    }
+
     glTexImage2D(GL_TEXTURE_2D, 0, m_format,
         m_width, m_height, 0,
-        m_format, m_type,
+        imageFormat, m_type,
         nullptr);
 }
 

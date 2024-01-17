@@ -72,6 +72,7 @@ bool Context::Init() {
     m_skyboxProgram = Program::Create("./shader/skybox.vs", "./shader/skybox.fs");
     m_envMapProgram = Program::Create("./shader/env_map.vs", "./shader/env_map.fs");
 
+    //grass
     m_grassTexture = Texture::CreateFromImage(Image::Load("./image/grass.png").get());
     m_grassProgram = Program::Create("./shader/grass.vs", "./shader/grass.fs");
     m_grassPos.resize(10000);
@@ -104,6 +105,22 @@ bool Context::Init() {
     m_brickDiffuseTexture = Texture::CreateFromImage(Image::Load("./image/brickwall.jpg", false).get());
     m_brickNormalTexture = Texture::CreateFromImage(Image::Load("./image/brickwall_normal.jpg", false).get());
     m_normalProgram = Program::Create("./shader/normal.vs", "./shader/normal.fs");
+
+    //deferGeo 초기화
+    m_deferGeoProgram = Program::Create("./shader/defer_geo.vs", "./shader/defer_geo.fs");
+    m_deferLightProgram = Program::Create("./shader/defer_light.vs", "./shader/defer_light.fs");
+    //omni light 32개 랜덤 배치
+    m_deferLights.resize(32);
+    for (size_t i = 0; i < m_deferLights.size(); i++) {
+        m_deferLights[i].position = glm::vec3(
+            RandomRange(-10.0f, 10.0f),
+            RandomRange(1.0f, 4.0f),
+            RandomRange(-10.0f, 10.0f));
+        m_deferLights[i].color = glm::vec3(
+            RandomRange(0.05f, 0.3f),
+            RandomRange(0.05f, 0.3f),
+            RandomRange(0.05f, 0.3f));
+    }
     return true;
 }
 
@@ -160,6 +177,31 @@ void Context::Render() {
     }
     ImGui::End();
 
+    if (ImGui::Begin("G-Buffers")) {
+        const char* bufferNames[] = { "position", "normal", "albedo/specular"};
+        static int bufferSelect = 0;
+        ImGui::Combo("buffer", &bufferSelect, bufferNames, 3);
+        float width = ImGui::GetContentRegionAvail().x;
+        float height = width * ((float)m_height / (float)m_width);
+        auto selectedAttachment = m_deferGeoFramebuffer->GetColorAttachment(bufferSelect);
+        ImGui::Image((ImTextureID)selectedAttachment->Get(),
+            ImVec2(width, height), ImVec2(0, 1), ImVec2(1, 0));
+    }
+    ImGui::End();
+
+    //cameraFront, view, projection 계산
+    m_cameraFront =
+        glm::rotate(glm::mat4(1.0f),
+            glm::radians(m_cameraYaw), glm::vec3(0.0f, 1.0f, 0.0f)) *
+        glm::rotate(glm::mat4(1.0f),
+            glm::radians(m_cameraPitch), glm::vec3(1.0f, 0.0f, 0.0f)) *
+        glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
+
+    auto projection = glm::perspective(glm::radians(45.0f),
+        (float)m_width / (float)m_height, 0.01f, 150.0f);
+    auto view = glm::lookAt(m_cameraPos, m_cameraPos + m_cameraFront, m_cameraUp);
+
+
     //첫번째 render path (shadowMap)
     auto lightView = glm::lookAt(m_light.position,
         m_light.position + m_light.direction,
@@ -178,89 +220,125 @@ void Context::Render() {
     m_simpleProgram->SetUniform("color", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
     DrawScene(lightView, lightProjection, m_simpleProgram.get());
 
+    //geometry path
+    m_deferGeoFramebuffer->Bind();
+    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glViewport(0, 0, m_width, m_height);
+    m_deferGeoProgram->Use();
+    DrawScene(view, projection, m_deferGeoProgram.get());
+
     //default FrameBuffer로 복구
     Framebuffer::BindToDefault();
     glViewport(0, 0, m_width, m_height);
-
-    //m_framebuffer->Bind();
-
+    glClearColor(m_clearColor.r, m_clearColor.g, m_clearColor.b, m_clearColor.a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     //깊이 버퍼 활성화
     glEnable(GL_DEPTH_TEST);
 
-    m_cameraFront =
-        glm::rotate(glm::mat4(1.0f),
-            glm::radians(m_cameraYaw), glm::vec3(0.0f, 1.0f, 0.0f)) *
-        glm::rotate(glm::mat4(1.0f),
-            glm::radians(m_cameraPitch), glm::vec3(1.0f, 0.0f, 0.0f)) *
-        glm::vec4(0.0f, 0.0f, -1.0f, 0.0f);
+    //defer light 32개 그림
+    m_deferLightProgram->Use();
+    glActiveTexture(GL_TEXTURE0);
+    m_deferGeoFramebuffer->GetColorAttachment(0)->Bind();
+    glActiveTexture(GL_TEXTURE1);
+    m_deferGeoFramebuffer->GetColorAttachment(1)->Bind();
+    glActiveTexture(GL_TEXTURE2);
+    m_deferGeoFramebuffer->GetColorAttachment(2)->Bind();
+    glActiveTexture(GL_TEXTURE0);
+    m_deferLightProgram->SetUniform("gPosition", 0);
+    m_deferLightProgram->SetUniform("gNormal", 1);
+    m_deferLightProgram->SetUniform("gAlbedoSpec", 2);
+    for (size_t i = 0; i < m_deferLights.size(); i++) {
+        //string을 만들어내는 fmt::format 함수 lights[0].position ...
+        auto posName = fmt::format("lights[{}].position", i);
+        auto colorName = fmt::format("lights[{}].color", i);
+        m_deferLightProgram->SetUniform(posName, m_deferLights[i].position);
+        m_deferLightProgram->SetUniform(colorName, m_deferLights[i].color);
+    }
+    m_deferLightProgram->SetUniform("transform", glm::scale(glm::mat4(1.0f), glm::vec3(2.0f)));
+    m_plane->Draw(m_deferLightProgram.get());
 
-    auto projection = glm::perspective(glm::radians(45.0f),
-        (float)m_width / (float)m_height, 0.01f, 150.0f);
-    auto view = glm::lookAt(m_cameraPos, m_cameraPos + m_cameraFront, m_cameraUp);
+    //defer이후 forward 과정 전에 depth buffer를 복사
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, m_deferGeoFramebuffer->Get());
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBlitFramebuffer(0, 0, m_width, m_height,
+        0, 0, m_width, m_height,
+        GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    //skybox
-    auto skyboxModelTransform =
-      glm::translate(glm::mat4(1.0), m_cameraPos) *
-      glm::scale(glm::mat4(1.0), glm::vec3(50.0f));
-    m_skyboxProgram->Use();
-    m_cubeTexture->Bind();
-    m_skyboxProgram->SetUniform("skybox", 0);
-    m_skyboxProgram->SetUniform("transform", projection * view * skyboxModelTransform);
-    m_box->Draw(m_skyboxProgram.get());
-
-    glm::vec3 lightPos = m_light.position;
-    glm::vec3 lightDir = m_light.direction;
-    if(m_flashLightMode) {
-        lightPos = m_cameraPos;
-        lightDir = m_cameraFront;
-    } else {
-        //광원 그리기
-        auto lightModelTransform =
-            glm::translate(glm::mat4(1.0), m_light.position) *
-            glm::scale(glm::mat4(1.0), glm::vec3(0.1f));
-        m_simpleProgram->Use();
-        m_simpleProgram->SetUniform("color", glm::vec4(m_light.ambient + m_light.diffuse, 1.0f));
-        m_simpleProgram->SetUniform("transform", projection * view * lightModelTransform);
-        m_box->Draw(m_program.get());
+    //light의 위치에 box를 그림
+    m_simpleProgram->Use();
+    for (size_t i = 0; i < m_deferLights.size(); i++) {
+        m_simpleProgram->SetUniform("color", glm::vec4(m_deferLights[i].color, 1.0f));
+        m_simpleProgram->SetUniform("transform",
+            projection * view *
+            glm::translate(glm::mat4(1.0f), m_deferLights[i].position) *
+            glm::scale(glm::mat4(1.0f), glm::vec3(0.1f)));
+        m_box->Draw(m_simpleProgram.get());
     }
 
-    m_lightingShadowProgram->Use();
-    m_lightingShadowProgram->SetUniform("viewPos", m_cameraPos);
-    m_lightingShadowProgram->SetUniform("light.directional", m_light.directional ? 1 : 0);
-    m_lightingShadowProgram->SetUniform("light.position", m_light.position);
-    m_lightingShadowProgram->SetUniform("light.direction", m_light.direction);
-    m_lightingShadowProgram->SetUniform("light.cutoff", glm::vec2(
-        cosf(glm::radians(m_light.cutoff[0])),
-        cosf(glm::radians(m_light.cutoff[0] + m_light.cutoff[1]))));
-    m_lightingShadowProgram->SetUniform("light.attenuation", GetAttenuationCoeff(m_light.distance));
-    m_lightingShadowProgram->SetUniform("light.ambient", m_light.ambient);
-    m_lightingShadowProgram->SetUniform("light.diffuse", m_light.diffuse);
-    m_lightingShadowProgram->SetUniform("light.specular", m_light.specular);
-    m_lightingShadowProgram->SetUniform("blinn", (m_blinn ? 1 : 0));
-    m_lightingShadowProgram->SetUniform("lightTransform", lightProjection * lightView);
-    glActiveTexture(GL_TEXTURE3);
-    m_shadowMap->GetShadowMap()->Bind();
-    m_lightingShadowProgram->SetUniform("shadowMap", 3);
-    glActiveTexture(GL_TEXTURE0);
+    // //skybox
+    // auto skyboxModelTransform =
+    //   glm::translate(glm::mat4(1.0), m_cameraPos) *
+    //   glm::scale(glm::mat4(1.0), glm::vec3(50.0f));
+    // m_skyboxProgram->Use();
+    // m_cubeTexture->Bind();
+    // m_skyboxProgram->SetUniform("skybox", 0);
+    // m_skyboxProgram->SetUniform("transform", projection * view * skyboxModelTransform);
+    // m_box->Draw(m_skyboxProgram.get());
 
-    DrawScene(view, projection, m_lightingShadowProgram.get());
+    // glm::vec3 lightPos = m_light.position;
+    // glm::vec3 lightDir = m_light.direction;
+    // if(m_flashLightMode) {
+    //     lightPos = m_cameraPos;
+    //     lightDir = m_cameraFront;
+    // } else {
+    //     //광원 그리기
+    //     auto lightModelTransform =
+    //         glm::translate(glm::mat4(1.0), m_light.position) *
+    //         glm::scale(glm::mat4(1.0), glm::vec3(0.1f));
+    //     m_simpleProgram->Use();
+    //     m_simpleProgram->SetUniform("color", glm::vec4(m_light.ambient + m_light.diffuse, 1.0f));
+    //     m_simpleProgram->SetUniform("transform", projection * view * lightModelTransform);
+    //     m_box->Draw(m_program.get());
+    // }
 
-    //normal map brick 그리기
-    auto modelTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 3.0f, 0.0f));
-    m_normalProgram->Use();
-    m_normalProgram->SetUniform("viewPos", m_cameraPos);
-    m_normalProgram->SetUniform("lightPos", m_light.position);
-    glActiveTexture(GL_TEXTURE0);
-    m_brickDiffuseTexture->Bind();
-    m_normalProgram->SetUniform("diffuse", 0);
-    glActiveTexture(GL_TEXTURE1);
-    m_brickNormalTexture->Bind();
-    m_normalProgram->SetUniform("normalMap", 1);
-    glActiveTexture(GL_TEXTURE0);
-    m_normalProgram->SetUniform("modelTransform", modelTransform);
-    m_normalProgram->SetUniform("transform", projection * view * modelTransform);
-    m_plane->Draw(m_normalProgram.get());
+    // m_lightingShadowProgram->Use();
+    // m_lightingShadowProgram->SetUniform("viewPos", m_cameraPos);
+    // m_lightingShadowProgram->SetUniform("light.directional", m_light.directional ? 1 : 0);
+    // m_lightingShadowProgram->SetUniform("light.position", m_light.position);
+    // m_lightingShadowProgram->SetUniform("light.direction", m_light.direction);
+    // m_lightingShadowProgram->SetUniform("light.cutoff", glm::vec2(
+    //     cosf(glm::radians(m_light.cutoff[0])),
+    //     cosf(glm::radians(m_light.cutoff[0] + m_light.cutoff[1]))));
+    // m_lightingShadowProgram->SetUniform("light.attenuation", GetAttenuationCoeff(m_light.distance));
+    // m_lightingShadowProgram->SetUniform("light.ambient", m_light.ambient);
+    // m_lightingShadowProgram->SetUniform("light.diffuse", m_light.diffuse);
+    // m_lightingShadowProgram->SetUniform("light.specular", m_light.specular);
+    // m_lightingShadowProgram->SetUniform("blinn", (m_blinn ? 1 : 0));
+    // m_lightingShadowProgram->SetUniform("lightTransform", lightProjection * lightView);
+    // glActiveTexture(GL_TEXTURE3);
+    // m_shadowMap->GetShadowMap()->Bind();
+    // m_lightingShadowProgram->SetUniform("shadowMap", 3);
+    // glActiveTexture(GL_TEXTURE0);
+
+    // DrawScene(view, projection, m_lightingShadowProgram.get());
+
+    // //normal map brick 그리기
+    // auto modelTransform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 3.0f, 0.0f));
+    // m_normalProgram->Use();
+    // m_normalProgram->SetUniform("viewPos", m_cameraPos);
+    // m_normalProgram->SetUniform("lightPos", m_light.position);
+    // glActiveTexture(GL_TEXTURE0);
+    // m_brickDiffuseTexture->Bind();
+    // m_normalProgram->SetUniform("diffuse", 0);
+    // glActiveTexture(GL_TEXTURE1);
+    // m_brickNormalTexture->Bind();
+    // m_normalProgram->SetUniform("normalMap", 1);
+    // glActiveTexture(GL_TEXTURE0);
+    // m_normalProgram->SetUniform("modelTransform", modelTransform);
+    // m_normalProgram->SetUniform("transform", projection * view * modelTransform);
+    // m_plane->Draw(m_normalProgram.get());
 }
 
 //key 입력을 받아 카메라를 이동
@@ -292,7 +370,14 @@ void Context::Reshape(int width, int height) {
     m_height = height;
     glViewport(0, 0, m_width, m_height);
 
-    m_framebuffer = Framebuffer::Create(Texture::Create(width, height, GL_RGBA));
+    m_framebuffer = Framebuffer::Create({Texture::Create(width, height, GL_RGBA)});
+
+    //position, normal, albedoSpec
+    m_deferGeoFramebuffer = Framebuffer::Create({
+        Texture::Create(width, height, GL_RGBA16F, GL_FLOAT),
+        Texture::Create(width, height, GL_RGBA16F, GL_FLOAT),
+        Texture::Create(width, height, GL_RGBA, GL_UNSIGNED_BYTE),
+    });
 }
 
 void Context::MouseMove(double x, double y) {

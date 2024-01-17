@@ -98,6 +98,17 @@ private:
     TextureUPtr m_brickDiffuseTexture;
     TextureUPtr m_brickNormalTexture;
     ProgramUPtr m_normalProgram;
+
+    // deferred shading
+    FramebufferUPtr m_deferGeoFramebuffer;
+    ProgramUPtr m_deferGeoProgram;
+    ProgramUPtr m_deferLightProgram;
+
+    struct DeferLight {
+        glm::vec3 position;
+        glm::vec3 color;
+    };
+    std::vector<DeferLight> m_deferLights;
 };
 
 #endif // __CONTEXT_H__
